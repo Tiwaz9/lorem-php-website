@@ -1,4 +1,4 @@
-
+# terraform/alb_asg.tf
 
 # 1) Get latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
@@ -40,17 +40,21 @@ dir="/var/www/lorem-app/public"
 mkdir -p "$dir"
 chown nginx:nginx "$dir"
 
-# Clone the application code
+# Clone the application code (public repo containing only the public/ folder)
 cd /tmp
 git clone --branch ${var.github_repo_branch} ${var.github_repo_url} repo
 
-# Copy files into the webroot
-# Depending on your repo layout, adjust this path
-# If your repo root contains index.php & image.png directly:
-cp -r /tmp/repo/* "$dir" || true
-# Or if your files are under /tmp/repo/public, uncomment:
-# cp -r /tmp/repo/public/* "$dir"
-chown -R nginx:nginx "$dir" "$dir"
+# Copy files from the 'public' directory of the repo into webroot
+if [ -d /tmp/repo/public ]; then
+  cp -r /tmp/repo/public/* "$dir"
+elif [ -d /tmp/repo/app/public ]; then
+  cp -r /tmp/repo/app/public/* "$dir"
+else
+  echo "Error: public directory not found in repo" >&2
+fi
+
+# Set correct ownership so NGINX can serve so NGINX can serve
+chown -R nginx:nginx "$dir"
 
 # Create NGINX configuration
 echo 'server {' > /etc/nginx/conf.d/lorem.conf

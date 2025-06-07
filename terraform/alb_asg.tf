@@ -1,3 +1,5 @@
+# terraform/alb_asg.tf
+
 # 1) Latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
   owners      = ["amazon"]
@@ -8,7 +10,7 @@ data "aws_ami" "amazon_linux" {
   }
 }
 
-# 2) Launch Template: install NGINX + PHP + Git, then clone from GitHub
+# 2) Launch Template: install NGINX, PHP, Git, clone GitHub, serve and inject API URL
 resource "aws_launch_template" "web_lt" {
   name_prefix   = "${var.project_name}-lt-"
   image_id      = data.aws_ami.amazon_linux.id
@@ -33,14 +35,18 @@ resource "aws_launch_template" "web_lt" {
     yum clean metadata
     yum install -y nginx php-fpm git
 
-    # Create webroot directory
-    mkdir -p /var/www/lorem-app
+    # Prepare webroot
+    mkdir -p /var/www/lorem-app/public
 
-    # Clone from GitHub into the 'public' subfolder
-    cd /var/www/lorem-app
-    git clone --branch ${var.github_repo_branch} ${var.github_repo_url} public
+    # Clone the app repo
+    cd /tmp
+    git clone --branch ${var.github_repo_branch} ${var.github_repo_url} repo
 
-    # Configure NGINX to serve PHP from /var/www/lorem-app/public
+    # Copy PHP files into webroot
+    cp -r /tmp/repo/public/* /var/www/lorem-app/public/
+    chown -R nginx:nginx /var/www/lorem-app/public
+
+    # NGINX configuration
     cat > /etc/nginx/conf.d/lorem.conf << 'NGINX_CONF'
     server {
         listen       80;
@@ -48,20 +54,23 @@ resource "aws_launch_template" "web_lt" {
         root         /var/www/lorem-app/public;
         index        index.php index.html;
 
+        # Serve existing files or fall back to index.php
         location / {
-            try_files $uri $uri/ =404;
+            try_files $uri $uri/ /index.php;
         }
 
+        # PHP handling via UNIX socket and pass INVENTORY_API_URL
         location ~ \.php$ {
-            fastcgi_pass   127.0.0.1:9000;
+            fastcgi_pass   unix:/var/run/php-fpm/www.sock;
             fastcgi_index  index.php;
             fastcgi_param  SCRIPT_FILENAME  /var/www/lorem-app/public$fastcgi_script_name;
+            fastcgi_param  INVENTORY_API_URL  "https://${aws_api_gateway_rest_api.inventory_api.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_api_gateway_deployment.deployment.stage_name}/inventory";
             include        fastcgi_params;
         }
     }
     NGINX_CONF
 
-    # Start PHP-FPM and NGINX
+    # Start services
     systemctl enable php-fpm
     systemctl start  php-fpm
     systemctl enable nginx
@@ -77,7 +86,7 @@ resource "aws_launch_template" "web_lt" {
   }
 }
 
-# 3) Target Group for ALB (port 80 → HTTP)
+# 3) Target Group for ALB
 resource "aws_lb_target_group" "web_tg" {
   name     = "${var.project_name}-tg"
   port     = 80
@@ -98,7 +107,7 @@ resource "aws_lb_target_group" "web_tg" {
   }
 }
 
-# 4) Application Load Balancer (in public subnets)
+# 4) Application Load Balancer
 resource "aws_lb" "web_alb" {
   name               = "${var.project_name}-alb"
   internal           = false
@@ -111,7 +120,7 @@ resource "aws_lb" "web_alb" {
   }
 }
 
-# 5) Listener on ALB port 80 → forward to target group
+# 5) Listener on ALB port 80
 resource "aws_lb_listener" "web_listener" {
   load_balancer_arn = aws_lb.web_alb.arn
   port              = 80
@@ -123,7 +132,7 @@ resource "aws_lb_listener" "web_listener" {
   }
 }
 
-# 6) Auto Scaling Group (in private subnets)
+# 6) Auto Scaling Group
 resource "aws_autoscaling_group" "web_asg" {
   name                 = "${var.project_name}-asg"
   max_size             = var.max_size

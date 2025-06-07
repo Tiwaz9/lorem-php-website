@@ -7,14 +7,10 @@
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
     img  { max-width: 300px; display: block; margin-top: 20px; }
-    #inventory { 
-      white-space: pre-wrap; 
-      background: #f8f8f8; 
-      padding: 10px; 
-      border: 1px solid #ddd; 
-      margin-top: 20px; 
-      font-family: monospace;
-    }
+    #inventory { margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f2f2f2; }
     button { padding: 10px 20px; font-size: 1rem; cursor: pointer; }
   </style>
 </head>
@@ -35,22 +31,53 @@
   <div id="inventory"></div>
 
   <script>
-    // Read the API URL injected by NGINX via fastcgi_param
     const apiUrl = "<?php echo getenv('INVENTORY_API_URL'); ?>";
+    
+    function renderTable(data, columns, title) {
+      let html = `<h2>${title}</h2><table><thead><tr>`;
+      columns.forEach(col => html += `<th>${col}</th>`);
+      html += `</tr></thead><tbody>`;
+      data.forEach(item => {
+        html += `<tr>`;
+        columns.forEach(col => {
+          let val = item[col] !== undefined ? item[col] : '';
+          if (typeof val === 'object') val = JSON.stringify(val);
+          html += `<td>${val}</td>`;
+        });
+        html += `</tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+    }
 
     document.getElementById('fetchBtn').addEventListener('click', () => {
       const out = document.getElementById('inventory');
-      out.textContent = 'Loading…';
+      out.innerHTML = 'Loading…';
       fetch(apiUrl)
         .then(response => {
           if (!response.ok) throw new Error(response.status + ' ' + response.statusText);
           return response.json();
         })
         .then(data => {
-          out.textContent = JSON.stringify(data, null, 2);
+          let html = `<p>Fetched at: ${data.timestamp}</p>`;
+          html += renderTable(data.vpcs.map(v => ({
+            VpcId: v.VpcId,
+            CidrBlock: v.CidrBlock,
+            IsDefault: v.IsDefault,
+            Tags: v.Tags
+          })), ['VpcId','CidrBlock','IsDefault','Tags'], 'VPCs');
+          html += renderTable(data.subnets.map(s => ({
+            SubnetId: s.SubnetId,
+            VpcId: s.VpcId,
+            CidrBlock: s.CidrBlock,
+            AvailabilityZone: s.AvailabilityZone,
+            MapPublicIpOnLaunch: s.MapPublicIpOnLaunch,
+            Tags: s.Tags
+          })), ['SubnetId','VpcId','CidrBlock','AvailabilityZone','MapPublicIpOnLaunch','Tags'], 'Subnets');
+          out.innerHTML = html;
         })
         .catch(err => {
-          out.textContent = 'Error fetching inventory:\n' + err;
+          out.textContent = 'Error fetching inventory: ' + err;
         });
     });
   </script>

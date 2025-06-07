@@ -1,18 +1,14 @@
 import json
 import os
 from datetime import datetime, timezone
-import time
-
 import boto3
 from botocore.exceptions import ClientError
 
-# DynamoDB table name (optional)
+# DynamoDB table name (if you still want to write to it)
 DDB_TABLE_NAME = os.environ.get("DDB_TABLE_NAME", "NetworkInventory")
 
-# AWS clients
+# AWS EC2 client
 ec2 = boto3.client("ec2")
-dynamodb = boto3.client("dynamodb")
-
 
 def iso_timestamp_now():
     """Return current UTC time as an ISO-formatted string."""
@@ -20,7 +16,7 @@ def iso_timestamp_now():
 
 
 def proxy_response(status_code, body_obj):
-    """Helper to build an AWS_PROXY-compatible response with CORS."""
+    """Helper to build an AWS_PROXY–compatible response with CORS."""
     return {
         "statusCode": status_code,
         "headers": {
@@ -33,39 +29,58 @@ def proxy_response(status_code, body_obj):
 
 def lambda_handler(event, context):
     """
-    Describes all VPCs and Subnets, writes to DynamoDB, and returns full resource details.
+    1) Describe all VPCs and Subnets
+    2) (Optional) Write inventory to DynamoDB
+    3) Return full details of resources in JSON
     """
     timestamp = iso_timestamp_now()
 
-    # Describe VPCs
+    # Fetch VPCs
     try:
-        vpcs_resp = ec2.describe_vpcs()
-        vpcs = vpcs_resp.get("Vpcs", [])
+        vpcs = ec2.describe_vpcs().get("Vpcs", [])
     except ClientError as e:
-        return proxy_response(500, {"error": f"DescribeVpcs failed: {str(e)}"})
+        return proxy_response(500, {"error": f"DescribeVpcs failed: {e}"})
 
-    # Describe Subnets
+    # Fetch Subnets
     try:
-        subnets_resp = ec2.describe_subnets()
-        subnets = subnets_resp.get("Subnets", [])
+        subnets = ec2.describe_subnets().get("Subnets", [])
     except ClientError as e:
-        return proxy_response(500, {"error": f"DescribeSubnets failed: {str(e)}"})
+        return proxy_response(500, {"error": f"DescribeSubnets failed: {e}"})
 
-    # Optional: write inventory to DynamoDB
-    # items = []
-    # for v in vpcs:
-    #     items.append({"VPC": v})
-    # for s in subnets:
-    #     items.append({"Subnet": s})
-    # batch_write(DDB_TABLE_NAME, items)
+    # Optional: DynamoDB write (uncomment if needed)
+    # from your_module import build_and_batch_write
+    # try:
+    #     build_and_batch_write(DDB_TABLE_NAME, vpcs, subnets, timestamp)
+    # except Exception as e:
+    #     print(f"DynamoDB write failed: {e}")
 
-    # Build detailed payload
+    # Build the JSON payload with detailed fields
     payload = {
         "timestamp":   timestamp,
         "vpcCount":    len(vpcs),
         "subnetCount": len(subnets),
-        "vpcs":        vpcs,
-        "subnets":     subnets
+        "vpcs":        [
+            {
+                "VpcId":             v.get("VpcId"),
+                "CidrBlock":         v.get("CidrBlock"),
+                "State":             v.get("State"),
+                "IsDefault":         v.get("IsDefault"),
+                "Tags":              v.get("Tags", [])
+            } for v in vpcs
+        ],
+        "subnets":     [
+            {
+                "SubnetId":               s.get("SubnetId"),
+                "VpcId":                  s.get("VpcId"),
+                "CidrBlock":              s.get("CidrBlock"),
+                "AvailabilityZone":       s.get("AvailabilityZone"),
+                "State":                  s.get("State"),
+                "AvailableIpAddressCount": s.get("AvailableIpAddressCount"),
+                "DefaultForAz":           s.get("DefaultForAz"),
+                "MapPublicIpOnLaunch":    s.get("MapPublicIpOnLaunch"),
+                "Tags":                   s.get("Tags", [])
+            } for s in subnets
+        ]
     }
 
     return proxy_response(200, payload)

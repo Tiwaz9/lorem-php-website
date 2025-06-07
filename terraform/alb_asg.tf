@@ -1,4 +1,4 @@
-# terraform/alb_asg.tf
+
 
 # 1) Get latest Amazon Linux 2 AMI
 data "aws_ami" "amazon_linux" {
@@ -45,8 +45,12 @@ cd /tmp
 git clone --branch ${var.github_repo_branch} ${var.github_repo_url} repo
 
 # Copy files into the webroot
-cp -r /tmp/repo/public/* "$dir"
-chown -R nginx:nginx "$dir"
+# Depending on your repo layout, adjust this path
+# If your repo root contains index.php & image.png directly:
+cp -r /tmp/repo/* "$dir" || true
+# Or if your files are under /tmp/repo/public, uncomment:
+# cp -r /tmp/repo/public/* "$dir"
+chown -R nginx:nginx "$dir" "$dir"
 
 # Create NGINX configuration
 echo 'server {' > /etc/nginx/conf.d/lorem.conf

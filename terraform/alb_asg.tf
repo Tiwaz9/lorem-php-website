@@ -134,11 +134,11 @@ resource "aws_lb_listener" "web_listener" {
 
 # 6) Auto Scaling Group
 resource "aws_autoscaling_group" "web_asg" {
-  name                 = "${var.project_name}-asg"
-  max_size             = var.max_size
-  min_size             = var.min_size
-  desired_capacity     = var.desired_capacity
-  vpc_zone_identifier  = aws_subnet.private.*.id
+  name                = "${var.project_name}-asg"
+  max_size            = var.max_size
+  min_size            = var.min_size
+  desired_capacity    = var.desired_capacity
+  vpc_zone_identifier = aws_subnet.private.*.id
 
   launch_template {
     id      = aws_launch_template.web_lt.id

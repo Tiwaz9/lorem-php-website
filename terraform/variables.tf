@@ -63,3 +63,18 @@ variable "github_repo_branch" {
   type        = string
   default     = "main"
 }
+variable "lambda_function_name" {
+  description = "Name of your Lambda function"
+  type        = string
+  default     = "InventoryVPCandSubnets"
+}
+
+variable "lambda_function_arn" {
+  description = "ARN of your Lambda function"
+  type        = string
+  default     = "arn:aws:lambda:eu-west-2:976193219226:function:InventoryVPCandSubnets"
+}
+
+variable "ddb_table_name" {
+  default = "NetworkInventory"
+}

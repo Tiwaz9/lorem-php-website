@@ -59,7 +59,7 @@ resource "aws_route_table_association" "public_assoc" {
 # 7) Elastic IPs for NAT Gateways (one per public subnet)
 resource "aws_eip" "nat_eip" {
   count  = length(var.public_subnets)
-  domain = "vpc"   # use 'domain' (not deprecated 'vpc' flag)
+  domain = "vpc" # use 'domain' (not deprecated 'vpc' flag)
 
   depends_on = [
     aws_internet_gateway.igw
@@ -94,11 +94,11 @@ resource "aws_route_table" "private_rt" {
 
 # 10) Private Subnets
 resource "aws_subnet" "private" {
-  count                  = length(var.private_subnets)
-  vpc_id                 = aws_vpc.main.id
-  cidr_block             = var.private_subnets[count.index]
+  count                   = length(var.private_subnets)
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.private_subnets[count.index]
   map_public_ip_on_launch = false
-  availability_zone      = data.aws_availability_zones.available.names[count.index]
+  availability_zone       = data.aws_availability_zones.available.names[count.index]
 
   tags = {
     Name = "${var.project_name}-private-${count.index + 1}"

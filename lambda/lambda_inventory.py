@@ -6,7 +6,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
-# DynamoDB table name
+# DynamoDB table name (optional)
 DDB_TABLE_NAME = os.environ.get("DDB_TABLE_NAME", "NetworkInventory")
 
 # AWS clients
@@ -20,7 +20,7 @@ def iso_timestamp_now():
 
 
 def format_tags(tag_list):
-    """Convert AWS tags into DynamoDB-friendly format."""
+    """Convert AWS tags into simple key/value dicts."""
     if not tag_list:
         return []
     return [{"Key": t.get("Key", ""), "Value": t.get("Value", "")} for t in tag_list]
@@ -39,7 +39,11 @@ def proxy_response(status_code, body_obj):
 
 
 def lambda_handler(event, context):
-    
+    """
+    1) Describe all VPCs and Subnets
+    2) Return full details of resources in JSON
+    (Optional DynamoDB write skipped here)
+    """
     timestamp = iso_timestamp_now()
 
     # Describe VPCs
@@ -54,9 +58,7 @@ def lambda_handler(event, context):
     except ClientError as e:
         return proxy_response(500, {"error": f"DescribeSubnets failed: {str(e)}"})
 
-  
-
-    # Build response payload
+    # Build response payload with detailed lists
     payload = {
         "timestamp":   timestamp,
         "vpcCount":    len(vpcs),
@@ -84,4 +86,3 @@ def lambda_handler(event, context):
     }
 
     return proxy_response(200, payload)
-

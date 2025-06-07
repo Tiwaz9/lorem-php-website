@@ -50,14 +50,21 @@
       const out = document.getElementById('inventory');
       out.innerHTML = 'Loading…';
       fetch(apiUrl)
-        .then(r => r.json())
-        .then(d => {
-          let content = `<p>Fetched at: ${d.timestamp}</p>`;
-          content += renderTable(d.vpcs, ['VpcId','CidrBlock','IsDefault','Tags'], 'VPCs');
-          content += renderTable(d.subnets, ['SubnetId','VpcId','CidrBlock','AvailabilityZone','MapPublicIpOnLaunch','Tags'], 'Subnets');
+        .then(response => {
+          if (!response.ok) throw new Error(response.status + ' ' + response.statusText);
+          return response.json();
+        })
+        .then(data => {
+          console.log('Received data:', data);
+          let content = `<p>Fetched at: ${data.timestamp}</p>`;
+          content += renderTable(data.vpcs, ['VpcId','CidrBlock','IsDefault','Tags'], 'VPCs');
+          content += renderTable(data.subnets, ['SubnetId','VpcId','CidrBlock','AvailabilityZone','MapPublicIpOnLaunch','Tags'], 'Subnets');
           out.innerHTML = content;
         })
-        .catch(e => { out.textContent = 'Error fetching inventory: ' + e; });
+        .catch(e => {
+          console.error('Fetch error:', e);
+          out.textContent = 'Error fetching inventory: ' + e;
+        });
     });
   </script>
 </body>

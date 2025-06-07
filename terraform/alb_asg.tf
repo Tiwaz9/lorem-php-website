@@ -56,7 +56,7 @@ resource "aws_launch_template" "web_lt" {
 
         # Serve existing files or fall back to index.php
         location / {
-            try_files $uri $uri/ /index.php;
+            try_files $uri $uri/ /index.php$is_args$args;
         }
 
         # PHP handling via UNIX socket and pass INVENTORY_API_URL
